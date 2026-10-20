@@ -1,22 +1,57 @@
 const mqtt = require("mqtt");
 
-const BROKER_URL = "mqtt://10.0.2.2:1884";
-const TOPIC = "factory/line2/telemetry";
-
 const MachineStatus = {
 	STOPPED: 0,
 	RUNNING: 1,
 	FAULT: 2,
 };
 
+function loadConfig() {
+  const configPath = path.join(
+    __dirname,
+    "config.json"
+  );
+
+  const config = JSON.parse(
+    fs.readFileSync(configPath, "utf8")
+  );
+
+  if (MachineStatus[config.machineStatus] === undefined) {
+    throw new Error(
+      `Invalid machine status: ${config.machineStatus}`
+    );
+  }
+
+  if (
+    typeof config.brokerUrl !== "string" ||
+    !/^mqtts?:\/\/.+/.test(config.brokerUrl)
+  ) {
+    throw new Error("Invalid MQTT broker URL");
+  }
+
+  if (
+    typeof config.topic !== "string" ||
+    !config.topic.trim() ||
+    /[+#]/.test(config.topic)
+  ) {
+    throw new Error("Invalid MQTT topic");
+  }
+
+  return config;
+}
+
+const config = loadConfig();
+
 const state = {
-	status: MachineStatus.RUNNING,
-	productionCount: 5000,
+    status: MachineStatus[config.machineStatus],	productionCount: 5000,
 	motorTemperature: 25,
 	motorCurrent: 0,
 	scrapCount: 30,
 
 };
+
+const BROKER_URL = config.brokerUrl;
+const TOPIC = config.topic;
 
 const client = mqtt.connect(BROKER_URL);
 

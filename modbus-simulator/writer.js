@@ -1,10 +1,6 @@
-
 const ModbusRTU = require("modbus-serial");
 
 const client = new ModbusRTU();
-
-const HOST = "10.0.2.2";
-const PORT = 5021;
 
 const MachineStatus = {
   STOPPED: 0,
@@ -12,8 +8,58 @@ const MachineStatus = {
   FAULT: 2
 };
 
+const configPath = path.join(__dirname, "config.json");
+
+function loadConfig() {
+  const configPath = path.join(
+    __dirname,
+    "config.json"
+  );
+
+  const config = JSON.parse(
+    fs.readFileSync(configPath, "utf8")
+  );
+
+  if (MachineStatus[config.machineStatus] === undefined) {
+    throw new Error(
+      `Invalid machine status: ${config.machineStatus}`
+    );
+  }
+
+  if (
+    typeof config.host !== "string" ||
+    !config.host.trim()
+  ) {
+    throw new Error("Invalid Modbus host");
+  }
+
+  if (
+    !Number.isInteger(config.port) ||
+    config.port < 1 ||
+    config.port > 65535
+  ) {
+    throw new Error("Invalid Modbus port");
+  }
+
+  if (
+    !Number.isInteger(config.unitId) ||
+    config.unitId < 1 ||
+    config.unitId > 247
+  ) {
+    throw new Error("Invalid Modbus unitId");
+  }
+
+  return config;
+}
+
+const config = loadConfig();
+
+const HOST = config.host;
+const PORT = config.port;
+const UNIT_ID = config.unitId;
+
 const state = {
-  status: MachineStatus.RUNNING,
+  status: MachineStatus[config.machineStatus],
   productionCount: 1000,
   motorTemperature: 25.0,
   motorCurrent: 0,

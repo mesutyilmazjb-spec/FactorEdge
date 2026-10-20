@@ -27,6 +27,11 @@ const vector = {
 
     holdingRegisters[address] = value;
 
+    // Simulator status register 20 -> Modbus 40001
+    if (address === 20) {
+    holdingRegisters[0] = value;
+    }
+
     // Telemetri alanlarını NestJS'in mevcut
     // Input Register haritasına yansıtıyoruz.
     if ([0, 1, 2, 3, 9, 19].includes(address)) {

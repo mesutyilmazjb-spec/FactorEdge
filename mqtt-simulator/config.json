@@ -1,0 +1,5 @@
+ {
+  "machineStatus": "RUNNING",
+  "brokerUrl": "mqtt://10.0.2.2:1884",
+  "topic": "factory/line2/telemetry"
+}
