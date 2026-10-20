@@ -1,0 +1,39 @@
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+build/
+coverage/
+.vite/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# Local database files
+*.sqlite
+*.sqlite3
+*.db
+postgres-data/
+timescale-data/
+pgdata/
+
+# IDE and operating system
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local certificates and keys
+*.pem
+*.key
+*.p12
+*.pfx

@@ -1,0 +1,88 @@
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg17
+    container_name: factoredge-timescaledb
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: factoredge
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: factoredge
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U factoredge -d factoredge"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+
+    image: factoredge-frontend:latest
+    container_name: factoredge-frontend
+
+    restart: unless-stopped
+
+    ports:
+      - "8080:80"
+
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    image: factoredge-backend:latest
+    container_name: factoredge-backend
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      RUNNING_IN_DOCKER: "true"
+      DB_HOST: timescaledb
+      DB_PORT: 5432
+      DB_USERNAME: factoredge
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_DATABASE: factoredge
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+  
+  modbus-server:
+    build:
+      context: ./modbus-server
+    container_name: factoredge-modbus-server
+    restart: unless-stopped
+    ports:
+      - "5021:5020"
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: factoredge-mosquitto
+    restart: unless-stopped
+
+    ports:
+      - "1884:1883"
+
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+volumes:
+  timescale_data:
