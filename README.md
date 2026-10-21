@@ -1,1388 +1,318 @@
+# FactorEdge — Akıllı Fabrika IoT İzleme Platformu
 
+FactorEdge, endüstriyel makinelerden **Modbus TCP** ve **MQTT** üzerinden telemetri toplayan, verileri ortak bir modele dönüştüren, **TimescaleDB** üzerinde saklayan ve **React** panelinde **Socket.IO** ile gerçek zamanlı gösteren bir demo platformudur.
 
-\# FactorEdge – Industrial IoT Monitoring Platform
+> **Kapsam:** Teknik değerlendirme için geliştirilmiş bir prototiptir; üretim ortamı için sertifikalı bir endüstriyel kontrol sistemi değildir. Aşağıdaki adresler ve portlar kullanılan yerel demo ortamına aittir.
 
+## 1. Kurulum ve çalıştırma adımları
 
+### Teknolojiler ve ön koşullar
 
-FactorEdge is a full-stack Industrial IoT (IIoT) monitoring platform built to collect, process, store, and visualize manufacturing telemetry in real time.
+- **Windows host:** Docker Desktop + Docker Compose; NestJS backend, React frontend, PostgreSQL/TimescaleDB, Mosquitto ve Modbus TCP Server.
+- **Ubuntu VM:** Docker Engine + Docker Compose; Modbus Writer ve MQTT Simulator.
+- Ubuntu VM ile Windows host arasında ağ erişimi ve projeye ait yerel `.env` yapılandırmaları gerekir.
 
+### Windows — platform servisleri
 
+Proje kökünde PowerShell açın:
 
-The project demonstrates how industrial devices using different communication protocols can be integrated into a unified monitoring architecture.
-
-
-
-It includes Modbus TCP and MQTT data acquisition, a NestJS backend, TimescaleDB for time-series storage, Socket.IO for real-time communication, and a React dashboard.
-
-
-
-\## 1. Key Features
-
-
-
-\- Industrial device management
-
-\- Modbus TCP polling
-
-\- MQTT telemetry ingestion
-
-\- Configurable Modbus register mapping
-
-\- Telemetry decoding and normalization
-
-\- Time-series data persistence
-
-\- Real-time dashboard updates
-
-\- Historical telemetry visualization
-
-\- Device connection status monitoring
-
-\- MQTT stale-data detection
-
-\- Modbus heartbeat monitoring
-
-\- JWT-based authentication
-
-\- Docker-based deployment
-
-\- Industrial device simulators
-
-
-
-\## 2. Technology Stack
-
-
-
-\### Backend
-
-
-
-\- Node.js
-
-\- TypeScript
-
-\- NestJS
-
-\- TypeORM
-
-\- PostgreSQL
-
-\- TimescaleDB
-
-\- Socket.IO
-
-\- modbus-serial
-
-\- mqtt.js
-
-\- JWT Authentication
-
-
-
-\### Frontend
-
-
-
-\- React
-
-\- TypeScript
-
-\- Vite
-
-\- Socket.IO Client
-
-\- Real-time telemetry charts
-
-
-
-\### Infrastructure
-
-
-
-\- Docker
-
-\- Docker Compose
-
-\- Eclipse Mosquitto
-
-\- Ubuntu Server
-
-\- Windows
-
-\- VirtualBox
-
-
-
-\## 3. System Architecture
-
-
-
-
-
-&#x20;               INDUSTRIAL DEVICES
-
-&#x20;                      |
-
-&#x20;          +-----------+-----------+
-
-&#x20;          |                       |
-
-&#x20;     Modbus TCP                  MQTT
-
-&#x20;          |                       |
-
-&#x20;  Modbus Simulator         MQTT Simulator
-
-&#x20;     (Ubuntu)                (Ubuntu)
-
-&#x20;          |                       |
-
-&#x20;    Modbus Server          Mosquitto Broker
-
-&#x20;     (Windows)                (Windows)
-
-&#x20;          |                       |
-
-&#x20;    ModbusConnector         MqttConnector
-
-&#x20;          |                       |
-
-&#x20;    PollingService          IngestionService
-
-&#x20;          |                       |
-
-&#x20;    ModbusDecoder                 |
-
-&#x20;          |                       |
-
-&#x20;          +-----------+-----------+
-
-&#x20;                      |
-
-&#x20;               TelemetryService
-
-&#x20;                      |
-
-&#x20;                  TimescaleDB
-
-&#x20;                      |
-
-&#x20;               TelemetryGateway
-
-&#x20;                      |
-
-&#x20;                   Socket.IO
-
-&#x20;                      |
-
-&#x20;                React Dashboard
-
+```powershell
+docker compose up -d --build
+docker compose ps
 ```
 
+Uygulama arayüzü: **http://localhost:8080**  
+Backend API: **http://localhost:3000** (Compose port eşlemesine bağlıdır).
 
+Demo ağında Windows host üzerindeki dış portlar:
 
-Both protocols ultimately produce a common telemetry structure.
+| Servis | Ubuntu'dan erişim | Docker ağı içinden erişim |
+| --- | --- | --- |
+| Modbus TCP Server | `10.0.2.2:5021` | `modbus-server:5020` |
+| MQTT / Mosquitto | `10.0.2.2:1884` | `mosquitto:1883` |
 
+`10.0.2.2` VirtualBox NAT yapılandırmasına özgüdür; farklı ağlarda host adresini değiştirin.
 
+### Ubuntu — simülatörler
 
-This allows the frontend and persistence layers to operate independently of the original industrial communication protocol.
-
-
-
-\## 4. Telemetry Model
-
-
-
-Each device produces telemetry containing the following information:
-
-
-
-| Field | Description |
-
-|---|---|
-
-| deviceId | Unique device identifier |
-
-| productionCount | Total produced units |
-
-| motorTemperature | Motor temperature |
-
-| motorCurrent | Motor electrical current |
-
-| scrapCount | Rejected production units |
-
-| status | Machine operating status |
-
-| timestamp | Telemetry timestamp |
-
-
-
-Supported machine states:
-
-
-
-\- RUNNING
-
-\- STOPPED
-
-\- FAULT
-
-
-
-Machine operating status and device communication status are separate concepts.
-
-
-
-For example, a machine can be STOPPED while its communication connection remains CONNECTED.
-
-
-
-\## 5. Modbus TCP Architecture
-
-
-
-Modbus TCP uses a request-response communication model.
-
-
-
-The backend actively reads registers from the Modbus server.
-
-
-
-\### 5.1 Modbus Simulator
-
-
-
-The Modbus simulator runs on Ubuntu Server.
-
-
-
-It generates simulated industrial production data:
-
-
-
-\- Production counter
-
-\- Motor temperature
-
-\- Motor current
-
-\- Scrap counter
-
-\- Machine status
-
-
-
-The simulator periodically writes these values to the Modbus TCP server.
-
-
-
-\### 5.2 Modbus Register Mapping
-
-
-
-The simulator uses the following zero-based register addresses:
-
-
-
-| Address | Data | Encoding |
-
-|---|---|---|
-
-| 0–1 | Production count | UInt32, ABCD |
-
-| 2–3 | Motor temperature | Float32, CDAB |
-
-| 9 | Motor current | Value / 100 |
-
-| 19 | Scrap count | UInt16 |
-
-| 20 | Machine status | UInt16 |
-
-| 21 | Heartbeat | UInt16 |
-
-
-
-Registers 0–3, 9, and 19 are exposed through the server's input-register map.
-
-
-
-Machine status and heartbeat are read from holding registers.
-
-
-
-\### 5.3 ModbusConnector
-
-
-
-ModbusConnector manages communication with the Modbus TCP server.
-
-
-
-Responsibilities include:
-
-
-
-\- Opening TCP connections
-
-\- Configuring the Modbus unit ID
-
-\- Reading input registers
-
-\- Reading holding registers
-
-\- Handling communication errors
-
-\- Managing reconnection
-
-\- Reading heartbeat values
-
-
-
-The connector isolates protocol-specific communication from business logic.
-
-
-
-\### 5.4 ModbusDecoder
-
-
-
-ModbusDecoder converts raw register values into application-level telemetry.
-
-
-
-Examples:
-
-
-
-\- Two 16-bit registers become a 32-bit production counter.
-
-\- Two registers become an IEEE 754 floating-point temperature.
-
-\- Raw motor current is converted using a scale factor.
-
-\- Numeric machine status values are mapped to application states.
-
-
-
-Keeping decoding separate from communication improves maintainability and testability.
-
-
-
-\### 5.5 PollingService
-
-
-
-PollingService periodically retrieves Modbus telemetry.
-
-
-
-Typical execution flow:
-
-
-
-1\. Retrieve configured devices.
-
-2\. Filter devices using the MODBUS protocol.
-
-3\. Establish or reuse a Modbus connection.
-
-4\. Read the heartbeat register.
-
-5\. Validate telemetry freshness.
-
-6\. Read the configured telemetry registers.
-
-7\. Decode the raw values.
-
-8\. Persist telemetry in TimescaleDB.
-
-9\. Update device connection status.
-
-10\. Publish telemetry through Socket.IO.
-
-
-
-The polling interval is approximately one second.
-
-
-
-\## 6. Modbus Heartbeat Monitoring
-
-
-
-A successful Modbus TCP read does not necessarily mean the original data source is still updating.
-
-
-
-For example, if the Modbus simulator stops but the Modbus server remains available, the server may continue returning previously written register values.
-
-
-
-Without an additional freshness mechanism, the backend could incorrectly treat stale data as new telemetry.
-
-
-
-FactorEdge addresses this using a heartbeat register.
-
-
-
-\### Heartbeat Mechanism
-
-
-
-The Modbus simulator increments register 21 during its normal update cycle.
-
-
-
-Example:
-
-
-
-Register 21 = 110
-
-Register 21 = 111
-
-Register 21 = 112
-
-Register 21 = 113
-
-
-
-
-
-The backend monitors whether this value changes.
-
-
-
-If the heartbeat remains unchanged beyond the configured timeout, the device is considered disconnected from its data source.
-
-
-
-The configured timeout is approximately 10 seconds.
-
-
-
-This prevents indefinitely storing and publishing stale telemetry after the timeout.
-
-
-
-When the simulator resumes and the heartbeat changes again, normal telemetry processing can resume.
-
-
-
-\## 7. MQTT Architecture
-
-
-
-MQTT uses a publish-subscribe communication model.
-
-
-
-Unlike Modbus polling, the backend does not periodically request telemetry from the MQTT device.
-
-
-
-Instead, devices publish messages to an MQTT broker.
-
-
-
-The backend subscribes to configured topics and processes incoming messages.
-
-
-
-\### 7.1 MQTT Simulator
-
-
-
-The MQTT simulator runs on Ubuntu Server.
-
-
-
-It generates telemetry and publishes JSON messages to Eclipse Mosquitto.
-
-
-
-Example topic:
-
-
-
-```text
-
-factory/line2/telemetry
-
+```bash
+cd /home/factoredge/factoredge
+docker compose up -d
+docker compose ps
+docker compose logs --tail=30 modbus-writer
+docker compose logs --tail=30 mqtt-simulator
 ```
 
+Simülatörlerin kendi `config.json` dosyalarında makine durumu ve bağlantı bilgileri tutulur:
 
-
-Example message:
-
-
+**Modbus (`modbus-simulator/config.json`):**
 
 ```json
-
 {
-
-&#x20; "productionCount": 1250,
-
-&#x20; "motorTemperature": 64.5,
-
-&#x20; "motorCurrent": 11.2,
-
-&#x20; "scrapCount": 18,
-
-&#x20; "status": "RUNNING"
-
+  "machineStatus": "RUNNING",
+  "host": "10.0.2.2",
+  "port": 5021,
+  "unitId": 1
 }
-
 ```
 
-
-
-\### 7.2 MqttConnector
-
-
-
-MqttConnector manages MQTT communication.
-
-
-
-Responsibilities include:
-
-
-
-\- Connecting to the MQTT broker
-
-\- Subscribing to device topics
-
-\- Receiving published messages
-
-\- Mapping topics to configured devices
-
-\- Handling connection events
-
-\- Forwarding messages through callbacks
-
-
-
-\### 7.3 IngestionService
-
-
-
-IngestionService orchestrates MQTT device telemetry ingestion.
-
-
-
-Typical execution flow:
-
-
-
-1\. Load configured MQTT devices.
-
-2\. Register MQTT connector callbacks.
-
-3\. Establish MQTT subscriptions.
-
-4\. Receive telemetry messages.
-
-5\. Associate messages with devices.
-
-6\. Validate and normalize telemetry.
-
-7\. Persist telemetry.
-
-8\. Update device connection status.
-
-9\. Publish real-time events.
-
-
-
-\### 7.4 MQTT Connection Monitoring
-
-
-
-MQTT broker connectivity and device telemetry freshness are not the same thing.
-
-
-
-A device may stop publishing while the broker connection remains active.
-
-
-
-FactorEdge therefore tracks the latest telemetry timestamp.
-
-
-
-If no new telemetry arrives within the configured freshness interval, the device can be marked DISCONNECTED.
-
-
-
-This helps detect silent device failures.
-
-
-
-\## 8. Database Architecture
-
-
-
-FactorEdge uses PostgreSQL with TimescaleDB.
-
-
-
-TimescaleDB provides time-series capabilities suitable for industrial telemetry.
-
-
-
-\### Device Entity
-
-
-
-The Device entity stores:
-
-
-
-\- Device identifier
-
-\- Device name
-
-\- Communication protocol
-
-\- Host and port
-
-\- Modbus unit ID
-
-\- MQTT topic
-
-\- Modbus register mapping
-
-\- Connection status
-
-\- Last telemetry timestamp
-
-\- Creation and update timestamps
-
-
-
-\### Telemetry Entity
-
-
-
-The Telemetry entity stores:
-
-
-
-\- Device identifier
-
-\- Production count
-
-\- Motor temperature
-
-\- Motor current
-
-\- Scrap count
-
-\- Machine status
-
-\- Timestamp
-
-
-
-Telemetry is stored in a TimescaleDB hypertable.
-
-
-
-This structure supports timestamp-based queries and historical monitoring.
-
-
-
-\## 9. Real-Time Communication
-
-
-
-FactorEdge uses Socket.IO to deliver telemetry to the React dashboard.
-
-
+**MQTT (`mqtt-simulator/config.json`):**
+
+```json
+{
+  "machineStatus": "RUNNING",
+  "brokerUrl": "mqtt://10.0.2.2:1884",
+  "topic": "factory/line2/telemetry"
+}
+```
+
+`machineStatus`: `RUNNING`, `STOPPED` veya `FAULT`. Bu değerler uygulama başlarken okunur. Mevcut Dockerfile'lar `config.json` dosyasını imaj içine kopyaladığından, değişiklikten sonra ilgili imajı **yeniden oluşturmak** gerekir:
+
+```bash
+cd /home/factoredge/factoredge/modbus-simulator
+docker build -t factoredge-modbus-writer:1.0 .
+docker compose up -d --force-recreate modbus-writer
+
+cd /home/factoredge/factoredge/mqtt-simulator
+docker build -t factoredge-mqtt-simulator:1.0 .
+docker compose up -d --force-recreate mqtt-simulator
+```
+
+İki simülatörün çalıştığını Dashboard üzerinden doğrulayın. Cihazların `CONNECTED` görünmesi, telemetri alanlarının güncellenmesi ve geçmiş grafiğin oluşması beklenir. Giriş için uygulamanın yapılandırılmış kullanıcı hesabını kullanın; parolaları README'ye eklemeyin.
+
+> **Veri güvenliği:** `docker compose down -v` komutunu rutin durdurma için kullanmayın; TimescaleDB dahil kalıcı volume'ları silebilir.
+
+## 2. Mimari tasarım: bileşenler ve veri akışı
+
+### 2.1 Genel sistem mimarisi
+
+FactorEdge iki ayrı çalışma ortamından oluşur: **Ubuntu VM** üzerinde çalışan makine simülatörleri ve **Windows Docker Compose** üzerinde çalışan veri toplama, depolama ve sunum servisleri. Backend, **NestJS modülleri** halinde ayrılmış bir uygulamadır; aşağıdaki kutular ayrı mikroservisler değil, aynı backend içindeki mantıksal bileşenlerdir.
+
+```mermaid
+flowchart TB
+    subgraph UB["Ubuntu VM — Docker"]
+      MW["Modbus Writer / Simulator"]
+      MT["MQTT Simulator"]
+    end
+    subgraph WIN["Windows Host — Docker Compose"]
+      MB["Modbus TCP Server :5020"]
+      MQ["Mosquitto Broker :1883"]
+      subgraph BE["NestJS Backend :3000"]
+        DEV["DevicesModule / DevicesService"]
+        POL["PollingService"]
+        MOD["ModbusConnector"]
+        DEC["ModbusDecoder"]
+        MQT["MqttConnector"]
+        ING["IngestionService"]
+        TEL["TelemetryService"]
+        GATE["TelemetryGateway / Socket.IO"]
+        AUTH["JWT Authentication"]
+        REST["REST Controllers"]
+      end
+      DB[("PostgreSQL + TimescaleDB")]
+      FE["React / Vite Dashboard :8080"]
+    end
+
+    MW -->|"FC06/FC16 register yazma · host:5021"| MB
+    POL -->|"Cihaz konfigürasyonu"| DEV
+    POL -->|"FC03 / FC04 ile okuma"| MOD
+    MB -->|"Register değerleri"| MOD
+    MOD --> DEC
+    DEC -->|"Normalize edilmiş telemetri"| POL
+    MT -->|"JSON publish · host:1884"| MQ
+    MQ -->|"Topic subscription"| MQT
+    ING -->|"Abonelik ve callback yönetimi"| MQT
+    MQT -->|"Gelen mesaj"| ING
+    POL --> TEL
+    ING --> TEL
+    TEL --> DB
+    POL --> GATE
+    ING --> GATE
+    GATE -->|"Gerçek zamanlı olaylar"| FE
+    FE -->|"HTTP API / JWT"| REST
+    REST --> DEV
+    REST --> TEL
+    REST --> AUTH
+```
+
+> **Not:** Diyagramdaki `:5021` ve `:1884`, Ubuntu'nun Windows host'a eriştiği portlardır. Docker iç ağında Modbus `5020`, Mosquitto `1883` kullanır. `10.0.2.2` demo VirtualBox NAT adresidir.
+
+### 2.2 Katmanlar ve sorumluluklar
+
+| Katman / bileşen | Teknoloji | Sorumluluk |
+| --- | --- | --- |
+| Makine simülasyonu | Node.js, Ubuntu Docker | Üretim, sıcaklık, akım, scrap ve durum değerlerini üretmek |
+| Protokol / bağlantı | `modbus-serial`, `mqtt.js` | Modbus register okuma; MQTT broker bağlantısı ve topic aboneliği |
+| Veri toplama | `PollingService`, `IngestionService` | Modbus polling ve MQTT mesaj callback akışını yönetmek |
+| Çözümleme / normalizasyon | `ModbusDecoder`, MQTT mesaj işleme | Farklı kaynakları ortak Telemetry alanlarına dönüştürmek |
+| İş / cihaz yönetimi | `DevicesService` | Cihaz ayarları, protokol bilgileri ve bağlantı durumunu yönetmek |
+| Kalıcılık | TypeORM, PostgreSQL, TimescaleDB | Cihazları ve zaman serisi ölçümlerini saklamak |
+| Gerçek zamanlı iletişim | Socket.IO Gateway | Yeni telemetriyi ve bağlantı durumlarını tarayıcıya iletmek |
+| API / güvenlik | NestJS REST, JWT | Cihaz yönetimi, geçmiş sorguları ve kimlik doğrulama |
+| Sunum | React, Vite | Dashboard, Device Management ve geçmiş grafikler |
+
+### 2.3 Modbus TCP veri akışı (polling)
 
 ```text
-
-Industrial Device
-
-&#x20;      |
-
-Modbus / MQTT
-
-&#x20;      |
-
-NestJS Backend
-
-&#x20;      |
-
-TelemetryService
-
-&#x20;      |
-
-TelemetryGateway
-
-&#x20;      |
-
-&#x20;   Socket.IO
-
-&#x20;      |
-
-React Dashboard
-
+Ubuntu Modbus Writer
+    │ Her ~1 sn: register'lara veri yazar
+    ▼
+Windows Modbus TCP Server
+    ▲ FC03 (Holding) / FC04 (Input) okuma
+    │
+NestJS PollingService → ModbusConnector → ModbusDecoder
+    │                                   (dataType, wordOrder, scale)
+    ▼
+Ortak Telemetry modeli
+    ├──► TelemetryService ──► TimescaleDB
+    └──► TelemetryGateway ──► React Dashboard
 ```
 
+`PollingService` cihaz listesindeki **MODBUS** kaynaklarını işler. `ModbusConnector` TCP bağlantısı kurar ve `registerMap` yapılandırmasına göre gerekli adresleri okur. `ModbusDecoder`, ham 16-bit register değerlerini `uint16`, `int16`, `uint32` ve `float32` tiplerine dönüştürür; `ABCD`/`CDAB` word order ve `scale` uygular. Telemetri ortak modele çevrilir, kaydedilir ve canlı yayınlanır.
 
+**Register örnekleri:** Production `30001–30002` (FC04, `uint32`, `ABCD`); Temperature `30003–30004` (FC04, `float32`, `CDAB`); Current `30010` (FC04, `int16`, `scale=0.01`); Scrap `30020` (FC04); Status `40001` (FC03). Projede Modbus Writer'ın offset 20'ye yazdığı status, Server tarafından holding offset 0'dan okunabilir hale getirilmiştir.
 
-When telemetry arrives, the backend persists the data and publishes a real-time event.
-
-
-
-The frontend listens for these events and updates its local state.
-
-
-
-This avoids repeatedly requesting the latest telemetry through HTTP.
-
-
-
-Historical telemetry is loaded separately through the REST API.
-
-
-
-\## 10. React Dashboard
-
-
-
-The React dashboard provides a unified view of industrial devices.
-
-
-
-Implemented capabilities include:
-
-
-
-\- Device listing
-
-\- Current telemetry values
-
-\- Machine operating status
-
-\- Device connection status
-
-\- Real-time Socket.IO updates
-
-\- Historical telemetry charts
-
-\- Device management interface
-
-
-
-The dashboard distinguishes machine operating status from communication availability.
-
-
-
-For example:
-
-
+### 2.4 MQTT veri akışı (publish / subscribe)
 
 ```text
-
-Machine Status: RUNNING
-
-Connection Status: CONNECTED
-
+Ubuntu MQTT Simulator
+    │ publish: factory/line2/telemetry (JSON + timestamp)
+    ▼
+Mosquitto Broker
+    │ topic aboneliği
+    ▼
+MqttConnector ──► IngestionService
+                        │ Mesajı cihazla eşleştir, doğrula,
+                        │ normalize et, tazeliği takip et
+                        ▼
+                 Ortak Telemetry modeli
+                        ├──► TelemetryService ──► TimescaleDB
+                        └──► TelemetryGateway ──► React Dashboard
 ```
 
+MQTT tarafında Backend register okumaz; Broker'a abone olarak gelen mesajları alır. `IngestionService` callback ve cihaz bağlantı durumu akışını yönetir. Her iki protokolün sonucu aynı telemetri modeline aktarılır; böylece veritabanı ve Dashboard protokolden bağımsız çalışır.
 
+### 2.5 Canlı veri, geçmiş veri ve bağlantı sağlığı
 
-Or:
+- **Canlı veri:** Yeni telemetri, `TelemetryGateway` üzerinden Socket.IO ile Dashboard'a iletilir.
+- **Geçmiş veri:** Telemetry kayıtları TimescaleDB'de tutulur; React, REST API üzerinden geçmiş verileri sorgular ve grafik oluşturur.
+- **Modbus heartbeat:** Ubuntu Writer holding register `40022` (offset `21`) sayacını artırır. TCP Server çalışmaya devam etse bile Writer durduğunda sayaç sabit kalır; Backend bu durumu tespit etmek için heartbeat tazeliğini izler.
+- **MQTT stale kontrolü:** Broker bağlantısı açık olsa bile yeni mesaj gelmeyebilir. `IngestionService`, son telemetri zamanına bakarak güncelliği değerlendirir.
+- **İki ayrı durum:** `RUNNING / STOPPED / FAULT` makinenin operasyonel durumudur; `CONNECTED / DISCONNECTED` ise telemetri kaynağının bağlantı/güncellik durumudur.
 
+## 3. Veri modeli
 
+### Device
 
-```text
+Bir endüstriyel veri kaynağının bağlantı ve protokol yapılandırmasını tutar.
 
-Machine Status: RUNNING (last received)
+| Alan | Açıklama |
+| --- | --- |
+| `id` | Cihaz kimliği (UUID) |
+| `name` | Görünen cihaz adı |
+| `protocol` | `MODBUS` veya `MQTT` |
+| `host`, `port` | Bağlantı hedefi |
+| `unitId` | Modbus slave/unit kimliği (Modbus için) |
+| `registerMap` | Modbus register adresleri, function code, veri tipi, word order ve scale |
+| `topic` | MQTT abonelik topic'i (MQTT için) |
+| `connectionStatus` | `CONNECTING`, `CONNECTED`, `DISCONNECTED` |
+| `lastDataAt` | Son alınan telemetri zamanı |
+| `createdAt`, `updatedAt` | Kayıt zamanları |
 
-Connection Status: DISCONNECTED
+### Telemetry
 
+Her örnek bir cihaza aittir; zaman serisi verisi TimescaleDB'de saklanır.
+
+| Alan | Açıklama |
+| --- | --- |
+| `deviceId` | İlgili `Device` kaydı |
+| `productionCount` | Toplam üretim adedi |
+| `motorTemperature` | Motor sıcaklığı (°C) |
+| `motorCurrent` | Motor akımı (A) |
+| `scrapCount` | Hatalı üretim adedi |
+| `status` | `STOPPED`, `RUNNING`, `FAULT` |
+| `timestamp` | Ölçüm zamanı |
+
+**İlişki:** `Device (1) → (N) Telemetry`. TimescaleDB zaman bazlı geçmiş sorguları için kullanılır. Dashboard güncel ölçümleri Socket.IO üzerinden, geçmişi REST API üzerinden alır.
+
+### Modbus register map
+
+| Alan | Mantıksal adres | FC | Tip | Word order / scale |
+| --- | --- | --- | --- | --- |
+| Production | 30001–30002 | 04 | `uint32` | `ABCD`, ×1 |
+| Temperature | 30003–30004 | 04 | `float32` | `CDAB`, ×1 |
+| Current | 30010 | 04 | `int16` | ×0.01 |
+| Scrap | 30020 | 04 | `uint16` | ×1 |
+| Machine status | 40001 | 03 | `uint16` | ×1 |
+| Heartbeat (ek alan) | 40022 | 03 | `uint16` | ×1 |
+
+Adresler dokümanda 1 tabanlı gösterilir; `modbus-serial` kütüphanesine okuma için sıfır tabanlı offset verilir. Örneğin `40001 → readHoldingRegisters(0, 1)`. Demo Modbus Server'ında Writer'ın status için kullandığı offset 20 ile 40001 okuması arasında özel eşleme bulunur; bu, simülatör uyumluluğu için yapılmıştır.
+
+## 4. MQTT topic şeması ve mesaj biçimi
+
+**Demo topic:** `factory/line2/telemetry`
+
+Şema: `factory/{lineId}/telemetry`. Örneğin farklı hatlar `factory/line1/telemetry` ve `factory/line2/telemetry` kullanabilir. Backend'deki cihaz kaydının `topic` değeri yayın yapılan topic ile eşleşmelidir.
+
+Ubuntu MQTT Simulator'ın yayınladığı örnek JSON:
+
+```json
+{
+  "productionCount": 5021,
+  "motorTemperature": 66.2,
+  "motorCurrent": 13.45,
+  "scrapCount": 31,
+  "status": 1,
+  "timestamp": "2026-10-21T08:00:00.000Z"
+}
 ```
 
+`status` eşlemesi: `0 = STOPPED`, `1 = RUNNING`, `2 = FAULT`. Bunlar örnek değerlerdir. `deviceId`, yayıncı JSON'undan değil, abone olunan topic ile eşleşen cihaz kaydından belirlenir; backend telemetriyi ortak modele dönüştürür. Zaman damgası ISO 8601 biçimindedir.
 
+## 5. Verdiğimiz en önemli üç karar ve nedenleri
 
-In the second example, the last machine status is historical and does not indicate that fresh telemetry is arriving.
+**Karar 1 — Protokol bağımsız ortak telemetri modeli.** Modbus'tan register, MQTT'den JSON geliyor; ancak veri saklama, API ve arayüz tek bir `Telemetry` modeliyle çalışıyor. Böylece yeni protokoller eklenirken uygulamanın diğer katmanlarını değiştirme ihtiyacı azalıyor.
 
+**Karar 2 — Connector ile Decoder'ı ayırmak.** Connector TCP bağlantısı, register okuma veya MQTT aboneliği gibi taşıma sorumluluklarını; Decoder ise `uint32`, `float32`, `ABCD/CDAB`, scale ve status dönüşümlerini üstleniyor. Bu ayrım test edilebilirliği artırıyor ve sorunun bağlantıda mı veri yorumlamada mı olduğunu bulmayı kolaylaştırıyor.
 
+**Karar 3 — Hem gerçek zamanlı hem geçmiş veri, ayrıca tazelik kontrolü.** Socket.IO anlık güncellemeleri, TimescaleDB geçmiş ölçümleri sağlıyor. Modbus heartbeat ve MQTT son-mesaj zamanı kontrolü, yalnızca soketin açık olmasına güvenmenin yaratacağı yanlış `CONNECTED` durumlarını azaltıyor.
 
-\## 11. REST API
+## 6. Bilerek yapmadıklarımız ve nasıl yapacağımız
 
+| Mevcut sınır / eksik | Geliştirme yaklaşımı |
+| --- | --- |
+| Tam otomatik test kapsamı yok | Jest ile Decoder birim testleri; sahte Modbus/MQTT kaynaklarıyla entegrasyon ve kesinti/iyileşme testleri eklemek |
+| Çok sayıda Modbus cihazı için bağlantı havuzu yok | Cihaz başına bağlantı yaşam döngüsü, kontrollü paralel polling, timeout ve retry politikaları uygulamak |
+| Birden fazla MQTT broker için tam bağlantı yönetimi yok | Broker bazlı client havuzu, topic abonelik yaşam döngüsü ve yeniden bağlanma yönetimi eklemek |
+| Üretim seviyesinde güvenlik tamamlanmadı | Başlangıç kullanıcı parolalarını kaynak kodundan çıkarıp güvenli yapılandırma/secret yönetimine taşımak; broker kimlik doğrulama ve TLS eklemek; ADMIN/VIEWER yetkilerini uçtan uca test etmek |
+| Gelişmiş operasyonel gözlemleme yok | Yapılandırılmış loglar, metrikler, health endpoint'leri, Prometheus/Grafana ve alarm mekanizmaları eklemek |
+| OEE, kestirimci bakım ve büyük ölçekli event streaming yok | İhtiyaç doğarsa ayrı hesaplama servisleri ve yüksek hacimde Kafka/RabbitMQ gibi asenkron altyapılar değerlendirmek |
 
+Bu maddeler mevcut prototipin sınırlarını açıkça belirtir; tamamlanmış özellikler olarak sunulmaz.
 
-\### Device Management
+## 7. Yapay zekâ aracının yanlış/eksik önerisi ve bunu nasıl fark ettik
 
+Geliştirme sırasında yapay zekâ desteğiyle oluşturulan Modbus yazma/okuma akışında **register adresi uyuşmazlığı** vardı:
 
+- Ubuntu Modbus Writer, makine durumunu holding register **offset 20**'ye yazıyordu.
+- Backend register map'i case dokümanına uygun olarak **40001**, yani holding register **offset 0** adresini okuyordu.
+- Simulator `FAULT = 2` üretirken Dashboard `STOPPED` gösteriyordu.
 
-| Method | Endpoint | Description |
+**Nasıl fark ettik?** Simulator loglarını, `ModbusConnector.readRawData()`, `ModbusDecoder.decodeStatus()` ve `DEFAULT_MODBUS_REGISTER_MAP` kodlarını karşılaştırdık. Decoder'ın `2 → FAULT` eşlemesi doğruydu; sorun verinin farklı holding register adresinden okunmasıydı.
 
-|---|---|---|
+**Nasıl düzelttik?** Demo Modbus Server'ında Writer'ın offset 20'ye yazdığı status değerini holding offset 0 üzerinden okunabilir hale getiren eşleme ekledik. Ardından `FAULT` durumunun Dashboard'a doğru ulaştığını doğruladık.
 
-| GET | /devices | List devices |
+**Öğrenim:** Yapay zekâ tarafından önerilen kodun derlenmesi veya servisin ayakta olması, protokol semantiğinin doğru olduğu anlamına gelmez. Modbus'ta **FC03/FC04 ayrımı**, **30001/40001 gösterimi** ve **sıfır tabanlı offset** mutlaka gerçek veriyle test edilmelidir.
 
-| GET | /devices/:id | Get device details |
+---
 
-| POST | /devices | Create device |
+### Kısa demo senaryosu
 
-| PATCH | /devices/:id | Update device |
+1. Windows ve Ubuntu Compose servislerini başlatın; Dashboard'da Modbus ve MQTT cihazlarını gösterin.
+2. Canlı üretim, sıcaklık, akım, scrap ve status güncellemelerini izleyin.
+3. Simulator `config.json` üzerinden `RUNNING`, `STOPPED`, `FAULT` durumlarını gösterin (imajı yeniden oluşturun).
+4. Bir simülatörü durdurup veri tazeliği/bağlantı durumunun değişimini, ardından yeniden başlamasını gösterin.
+5. Device Management üzerinden cihaz yapılandırmasını ve geçmiş grafiğini gösterin.
+6. Rol yetkisi gösterimini ancak backend tarafında gerçekten doğrulandıysa gerçekleştirin.
 
-| DELETE | /devices/:id | Delete device |
-
-| GET | /devices/:id/test-connection | Test device connection |
-
-
-
-\### Telemetry
-
-
-
-| Method | Endpoint | Description |
-
-|---|---|---|
-
-| GET | /telemetry/:deviceId/history | Retrieve historical telemetry |
-
-
-
-Authentication and authorization requirements depend on the configured guards and roles.
-
-
-
-\## 12. Authentication
-
-
-
-The backend includes JWT-based authentication.
-
-
-
-JWT tokens allow the backend to identify authenticated clients.
-
-
-
-Authentication verifies the identity of a user.
-
-
-
-Authorization determines which operations that user may perform.
-
-
-
-For example, a role-based access model may distinguish between:
-
-
-
-\- ADMIN: device configuration and management
-
-\- VIEWER: read-only monitoring
-
-
-
-Role-based access restrictions should be verified against the actual controller guards and API responses before being considered fully validated.
-
-
-
-\## 13. Docker Architecture
-
-
-
-The project uses Docker Compose to manage its infrastructure and application services.
-
-
-
-\### Windows Services
-
-
-
-The Windows environment contains:
-
-
-
-\- NestJS Backend
-
-\- React Frontend
-
-\- TimescaleDB
-
-\- Mosquitto Broker
-
-\- Modbus TCP Server
-
-
-
-\### Ubuntu Services
-
-
-
-The Ubuntu virtual machine contains:
-
-
-
-\- Modbus Writer Simulator
-
-\- MQTT Simulator
-
-
-
-The Ubuntu simulators communicate with the Windows-hosted services through the VirtualBox networking configuration.
-
-
-
-\### Windows Startup
-
-
-
-From the FactorEdge project root:
-
-
-
-```powershell
-
-docker compose up -d --build
-
-```
-
-
-
-Check service status:
-
-
-
-```powershell
-
-docker compose ps
-
-```
-
-
-
-View backend logs:
-
-
-
-```powershell
-
-docker logs -f factoredge-backend
-
-```
-
-
-
-\### Ubuntu Startup
-
-
-
-```bash
-
-cd \~/factoredge
-
-docker compose up -d
-
-```
-
-
-
-Check containers:
-
-
-
-```bash
-
-docker ps
-
-```
-
-
-
-View Modbus simulator logs:
-
-
-
-```bash
-
-docker logs -f factoredge-modbus-writer
-
-```
-
-
-
-View MQTT simulator logs:
-
-
-
-```bash
-
-docker logs -f factoredge-mqtt-simulator
-
-```
-
-
-
-\### Important Database Note
-
-
-
-TimescaleDB uses persistent Docker storage.
-
-
-
-Do not use the following command unless intentionally deleting persistent volumes and their data:
-
-
-
-```bash
-
-docker compose down -v
-
-```
-
-
-
-\## 14. Local Network Configuration
-
-
-
-The development environment uses separate Windows and Ubuntu systems.
-
-
-
-Example Ubuntu simulator targets:
-
-
-
-| Service | Host | Port |
-
-|---|---|---|
-
-| Modbus TCP Server | 10.0.2.2 | 5021 |
-
-| MQTT Broker | 10.0.2.2 | 1884 |
-
-
-
-The IP address `10.0.2.2` is specific to the current VirtualBox NAT development setup.
-
-
-
-It should be changed for other deployment environments.
-
-
-
-Inside the Windows Docker Compose network, backend services communicate through Docker service names.
-
-
-
-For example:
-
-
-
-```text
-
-modbus-server:5020
-
-mosquitto:1883
-
-```
-
-
-
-These addresses should not be confused with the host ports exposed to the Ubuntu virtual machine.
-
-
-
-\## 15. Reliability and Error Handling
-
-
-
-FactorEdge includes several reliability mechanisms.
-
-
-
-\### Modbus
-
-
-
-\- TCP connection handling
-
-\- Connection timeout
-
-\- Reconnection attempts
-
-\- Heartbeat-based freshness detection
-
-\- Communication status updates
-
-
-
-\### MQTT
-
-
-
-\- Broker connection handling
-
-\- Topic subscriptions
-
-\- Device connection callbacks
-
-\- Last-telemetry freshness monitoring
-
-
-
-\### Backend
-
-
-
-\- Structured service responsibilities
-
-\- Device status management
-
-\- Error logging
-
-\- Prevention of overlapping Modbus polling cycles
-
-
-
-\### Frontend
-
-
-
-\- Socket.IO connection status handling
-
-\- Real-time telemetry updates
-
-\- Historical data loading
-
-\- Device-specific state management
-
-
-
-\## 16. Design Decisions
-
-
-
-\### Why Modbus and MQTT?
-
-
-
-Industrial systems commonly contain devices with different communication capabilities.
-
-
-
-Supporting both protocols demonstrates two different acquisition models:
-
-
-
-\- Modbus TCP: polling
-
-\- MQTT: publish-subscribe
-
-
-
-Both protocols feed a common telemetry pipeline.
-
-
-
-\### Why Separate Connectors?
-
-
-
-Protocol-specific code is isolated from application-level telemetry processing.
-
-
-
-This improves modularity and makes additional protocols easier to introduce.
-
-
-
-\### Why a Separate ModbusDecoder?
-
-
-
-Raw Modbus registers require protocol-specific interpretation.
-
-
-
-Separating decoding from communication improves clarity, testability, and maintainability.
-
-
-
-\### Why TimescaleDB?
-
-
-
-Industrial telemetry is timestamp-oriented.
-
-
-
-TimescaleDB extends PostgreSQL with features designed for time-series workloads while retaining SQL and relational database capabilities.
-
-
-
-\### Why Socket.IO?
-
-
-
-Socket.IO provides real-time communication between the backend and dashboard.
-
-
-
-It allows telemetry changes to reach the frontend without continuous HTTP polling.
-
-
-
-\### Why Docker?
-
-
-
-Docker provides reproducible service environments and simplifies local infrastructure management.
-
-
-
-\## 17. Manual Test Scenarios
-
-
-
-The following scenarios are useful for final acceptance testing.
-
-
-
-| Scenario | Expected Result |
-
-|---|---|
-
-| Start all services | Containers start successfully |
-
-| Start Modbus simulator | Modbus telemetry updates |
-
-| Start MQTT simulator | MQTT telemetry updates |
-
-| Stop Modbus Writer | Heartbeat timeout triggers disconnection |
-
-| Restart Modbus Writer | Telemetry resumes |
-
-| Stop MQTT Simulator | Device eventually becomes disconnected |
-
-| Restart MQTT Simulator | Telemetry resumes |
-
-| Stop MQTT Broker | MQTT ingestion detects connection loss |
-
-| Restart MQTT Broker | Subscriptions and ingestion recover |
-
-| Restart Backend | Services reconnect and resume processing |
-
-| Reload Dashboard | Historical data loads and live updates resume |
-
-| Invalid Modbus configuration | Error is handled without crashing the backend |
-
-
-
-A test should only be marked passed after its actual result has been verified.
-
-
-
-\## 18. Future Improvements
-
-
-
-Potential enhancements include:
-
-
-
-\- Automated unit and integration test coverage
-
-\- Advanced role-based authorization
-
-\- Alarm and notification management
-
-\- OEE calculations
-
-\- Equipment performance analytics
-
-\- Predictive maintenance
-
-\- Kafka or RabbitMQ integration for larger ingestion workloads
-
-\- Distributed telemetry processing
-
-\- Centralized observability and metrics
-
-\- Production-grade secrets management
-
-\- CI/CD pipelines
-
-\- Kubernetes deployment
-
-
-
-These are potential extensions rather than claims about currently implemented features.
-
-
-
-\## 19. Project Purpose
-
-
-
-FactorEdge was developed as a practical Industrial IoT architecture demonstration.
-
-
-
-Its main purpose is to explore how industrial communication protocols, backend services, time-series databases, and real-time web applications work together.
-
-
-
-The project focuses on:
-
-
-
-\- Industrial protocol integration
-
-\- Backend architecture
-
-\- Data ingestion
-
-\- Real-time communication
-
-\- Time-series persistence
-
-\- Docker-based infrastructure
-
-\- Fault detection and recovery
-
-\- Separation of concerns
-
-
-
-\## 20. Conclusion
-
-
-
-FactorEdge demonstrates an end-to-end Industrial IoT telemetry pipeline.
-
-
-
-Modbus TCP and MQTT data are collected through separate protocol adapters, transformed into a common telemetry model, persisted in TimescaleDB, and delivered to a React dashboard through Socket.IO.
-
-
-
-The architecture provides a foundation for future industrial monitoring and smart manufacturing applications.
-
-
-
-\---
-
-
-
-\*\*FactorEdge – Industrial IoT Monitoring Platform\*\*
-
-
-
+**Not:** README'deki örnek bağlantı bilgileri yerel demo ağına özeldir. Başlangıç kullanıcı şifreleri ve diğer sırlar kaynak kodunda sabit bırakılmamalıdır; üretim kullanımından önce güvenli yapılandırma yapılmalıdır.
